@@ -1,7 +1,7 @@
 import 'es6-promise/auto'
 import imageLoaded from 'image-loaded'
 import raf from 'raf'
-import {Animation, AnimationOptions, Frame, SpriteSheet, SpriteSheetOptions} from './types'
+import { Animation, AnimationOptions, Frame, SpriteSheet, SpriteSheetOptions } from './types'
 
 const playheadDefaults: Animation = {
   play: true,
@@ -42,6 +42,8 @@ class Spriteling {
     onLoaded: null
   }
 
+  private context: CanvasRenderingContext2D
+
   private playhead: Animation
 
   private readonly element: HTMLElement
@@ -49,6 +51,8 @@ class Spriteling {
   private debug: boolean
 
   private loadingPromise: Promise<void>
+
+  private image: any
 
   /**
    * Creates a new Spriteling instance. The options object can contain the following values
@@ -87,12 +91,16 @@ class Spriteling {
       document.body.appendChild(this.element)
     }
 
+    // Get canvas context
+    if (this.isUseCanvas()) {
+      this.context = (this.element as HTMLCanvasElement).getContext('2d')
+    }
     // Add spriteling class
     this.element.className += ' spriteling'
 
     // Combine options with defaults
-    this.spriteSheet = {...this.spriteSheet, ...options}
-    this.playhead = {...playheadDefaults}
+    this.spriteSheet = { ...this.spriteSheet, ...options }
+    this.playhead = { ...playheadDefaults }
     this.debug = debug || false
 
     // Initialize spritesheet
@@ -114,12 +122,12 @@ class Spriteling {
     }
 
     // Create loading promise
-    this.loadingPromise = this.loadSpriteSheet().then(() => {
+    this.loadingPromise = this.loadSpriteSheet().then((image) => {
       this.spriteSheet.loaded = true
-
+      this.image = image
       // If starting sprite is set, show it
       if (this.spriteSheet.startSprite > 1 && this.spriteSheet.startSprite <= this.spriteSheet.totalSprites) {
-        this.drawFrame({sprite: this.spriteSheet.startSprite})
+        this.drawFrame({ sprite: this.spriteSheet.startSprite })
       }
 
       // onLoaded callback
@@ -140,7 +148,7 @@ class Spriteling {
 
     this.playhead.play = false
 
-    this.drawFrame({sprite: spriteNumber})
+    this.drawFrame({ sprite: spriteNumber })
   }
 
   /**
@@ -247,9 +255,9 @@ class Spriteling {
 
       this.playhead = {
         ...playheadDefaults,
-        ...{script: animationScript},
+        ...{ script: animationScript },
         ...animationOptions,
-        ...{currentFrame}
+        ...{ currentFrame }
       }
     }
 
@@ -264,10 +272,6 @@ class Spriteling {
     }
   }
 
-  /**
-   * Get the current play state
-   * @returns {boolean}
-   */
   public isPlaying(): boolean {
     return this.playhead.play
   }
@@ -440,58 +444,66 @@ class Spriteling {
         if (sheet.frameHeight % 1 !== 0) {
           this.log('error', `frameHeight ${sheet.frameHeight} is not a whole number`)
         }
-
-        element.style.position = 'absolute'
-        element.style.width = `${sheet.frameWidth}px`
-        element.style.height = `${sheet.frameHeight}px`
-        element.style.backgroundImage = `url(${sheet.url})`
-        element.style.backgroundPosition = '0 0'
-
         if (sheet.downsizeRatio > 1) {
           element.style.backgroundSize =
             `${sheet.sheetWidth / sheet.downsizeRatio}px ${sheet.sheetHeight / sheet.downsizeRatio}px`
-        }
-
-        if (sheet.top !== null) {
-          if (sheet.top === 'center') {
-            element.style.top = '50%'
-            element.style.marginTop = `${sheet.frameHeight / 2 * -1}px`
-          } else {
-            element.style.top = `${sheet.top}px`
+          if (this.isUseCanvas()) {
+            this.context.scale(1 / sheet.downsizeRatio, 1 / sheet.downsizeRatio)
           }
         }
-        if (sheet.right !== null) {
-          element.style.right = `${sheet.right}px`
-        }
-        if (sheet.bottom !== null) {
-          element.style.bottom = `${sheet.bottom}px`
-        }
-        if (sheet.left !== null) {
-          if (sheet.left === 'center') {
-            element.style.left = `${sheet.left}px`
-            element.style.marginLeft = `${sheet.frameWidth / 2 * -1}px`
-          } else {
-            element.style.left = `${sheet.left}px`
+        if (!this.isUseCanvas()) {
+          element.style.position = 'absolute'
+          element.style.width = `${sheet.frameWidth}px`
+          element.style.height = `${sheet.frameHeight}px`
+          element.style.backgroundImage = `url(${sheet.url})`
+          element.style.backgroundPosition = '0 0'
+          if (sheet.top !== null) {
+            if (sheet.top === 'center') {
+              element.style.top = '50%'
+              element.style.marginTop = `${sheet.frameHeight / 2 * -1}px`
+            } else {
+              element.style.top = `${sheet.top}px`
+            }
+          }
+          if (sheet.right !== null) {
+            element.style.right = `${sheet.right}px`
+          }
+          if (sheet.bottom !== null) {
+            element.style.bottom = `${sheet.bottom}px`
+          }
+          if (sheet.left !== null) {
+            if (sheet.left === 'center') {
+              element.style.left = `${sheet.left}px`
+              element.style.marginLeft = `${sheet.frameWidth / 2 * -1}px`
+            } else {
+              element.style.left = `${sheet.left}px`
+            }
           }
         }
-
         // Auto script the first 'all' animation sequence and make it default
         this.autoScript()
-        const animationOptions = {script: sheet.animations.all}
-        this.playhead = {...playheadDefaults, ...animationOptions}
+        const animationOptions = { script: sheet.animations.all }
+        this.playhead = { ...playheadDefaults, ...animationOptions }
 
-        resolve()
+        resolve(preload)
       })
     })
   }
 
+  /**
+   * Get the current play Mode
+   * @returns {boolean}
+   */
+  private isUseCanvas(): boolean {
+    return this.element instanceof HTMLCanvasElement
+  }
   /**
    * Generate a linear script based on the spritesheet itself
    */
   private autoScript() {
     const script = []
     for (let i = 0; i < this.spriteSheet.totalSprites; i++) {
-      script[i] = {sprite: (i + 1)}
+      script[i] = { sprite: (i + 1) }
     }
     this.addScript('all', script)
   }
@@ -550,11 +562,59 @@ class Spriteling {
 
     }
   }
+  /**
+   * Draw a frame on canvas
+   */
+  private drawCanvasFrame(frame: Frame) {
+    const sheet = this.spriteSheet
+    const playhead = this.playhead
+    const element = this.element
 
+    this.playhead.nextDelay = frame.delay ? frame.delay : this.playhead.delay
+    this.playhead.nextDelay /= this.playhead.tempo
+
+    if (frame.sprite !== playhead.currentSprite) {
+
+      const rect = element.getBoundingClientRect()
+      const row = Math.ceil(frame.sprite / sheet.cols)
+      const col = frame.sprite - ((row - 1) * sheet.cols)
+      const bgX = ((col - 1) * sheet.frameWidth)
+      const bgY = ((row - 1) * sheet.frameHeight)
+
+      if (row > sheet.rows || col > sheet.cols) {
+        this.log('warn', `position ${frame.sprite} out of bound`)
+      }
+
+      // Set sprite
+      playhead.currentSprite = frame.sprite
+
+      // Animate
+      this.context.clearRect(0, 0, rect.width, rect.height)
+      this.context.drawImage(this.image,
+        bgX, bgY,
+        sheet.frameWidth, sheet.frameHeight,
+        0, 0,
+        sheet.frameWidth, sheet.frameHeight)
+    }
+
+    // onFrame callback
+    if (typeof playhead.onFrame === 'function') {
+      playhead.onFrame(playhead.currentFrame)
+    }
+
+    return true
+  }
+  private drawFrame(frame: Frame) {
+    if (this.isUseCanvas()) {
+      this.drawCanvasFrame(frame)
+    } else {
+      this.drawCSSFrame(frame)
+    }
+  }
   /**
    * Draw a single frame
    */
-  private drawFrame(frame: Frame) {
+  private drawCSSFrame(frame: Frame) {
     const sheet = this.spriteSheet
     const playhead = this.playhead
     const element = this.element
@@ -579,7 +639,6 @@ class Spriteling {
 
       // Animate background
       element.style.backgroundPosition = `${bgX}px ${bgY}px`
-
       // Move if indicated
       if (frame.top) {
         element.style.top = `${rect.top + frame.top}px`
@@ -608,6 +667,9 @@ class Spriteling {
    * @returns {boolean}
    */
   private inViewport(): boolean {
+    if (this.isUseCanvas()) {
+      return true
+    }
     const sheet = this.spriteSheet
     const rect = this.element.getBoundingClientRect()
     return (
