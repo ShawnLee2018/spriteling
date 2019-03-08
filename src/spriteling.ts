@@ -33,6 +33,7 @@ class Spriteling {
     right: null,
     startSprite: 1,
     downsizeRatio: 1,
+    fillCanvas: true,
     totalSprites: 0,
     sheetWidth: 0,
     sheetHeight: 0,
@@ -413,8 +414,12 @@ class Spriteling {
    */
   public destroy() {
     this.playhead.play = false
-
-    this.element.parentNode.removeChild(this.element)
+    if (this.isUseCanvas()) {
+      const rect = this.element.getBoundingClientRect()
+      this.context.clearRect(0, 0, rect.width, rect.height)
+    } else {
+      this.element.parentNode.removeChild(this.element)
+    }
   }
 
   /**
@@ -563,6 +568,34 @@ class Spriteling {
     }
   }
   /**
+   * Fill to container
+   * @param srcW source width
+   * @param srcH source height
+   * @param maxW max width
+   * @param maxH max height
+   * @returns [x,y,w,h]
+   */
+  private fillSize(srcW: number, srcH: number, maxW: number, maxH: number): [number, number, number, number] {
+
+    let x
+    let y
+    let w
+    let h
+
+    if (maxW / srcW > maxH / srcH) {
+      h = maxH
+      w = srcW * maxH / srcH
+      x = (maxW - w) * 0.5
+      y = 0
+    } else {
+      w = maxW
+      h = srcH * maxW / srcW
+      x = 0
+      y = (maxH - h) * 0.5
+    }
+    return [x, y, w, h]
+  }
+  /**
    * Draw a frame on canvas
    */
   private drawCanvasFrame(frame: Frame) {
@@ -587,14 +620,21 @@ class Spriteling {
 
       // Set sprite
       playhead.currentSprite = frame.sprite
-
       // Animate
       this.context.clearRect(0, 0, rect.width, rect.height)
+      let x = 0
+      let y = 0
+      let width = sheet.frameWidth
+      let height = sheet.frameHeight
+      if (sheet.fillCanvas) {
+        [x, y, width, height] = this.fillSize(sheet.frameWidth, sheet.frameHeight, rect.width, rect.height)
+      }
       this.context.drawImage(this.image,
         bgX, bgY,
         sheet.frameWidth, sheet.frameHeight,
         0, 0,
-        sheet.frameWidth, sheet.frameHeight)
+        width, height)
+
     }
 
     // onFrame callback
